@@ -1,0 +1,217 @@
+; *************************************************************************
+; * Examples
+; *************************************************************************
+;
+; ld a,0x12
+; ld bc,0x3456
+; ld de,0x789A
+; ld hl,0xBCDE
+;
+; DebugPrintHome ; Set cursor to top left
+;
+; DebugPrintChar 'Q' ; Output the character Q
+; DebugPrintChar 0x52 ; Output the ASCII character 0x52 (0x52 = R)
+; DebugPrintChar 83 ; Output the ASCII character 83 (83 = S)
+; DebugPrintChar c ; Take the value in register 'c' and output that ASCII character (c = 0x56 = V)
+;
+; DebugPrintNewLine ; Move the cursor to the start of the next line
+;
+; DebugPrintString "Hello World!" ; Output a string constant
+; DebugPrintNewLine ; Move the cursor to the start of the next line
+;
+; DebugPrintHexByte 123 ; Output the number 123 as hex (123 = 0x7B)
+; DebugPrintChar ',' ; Output a comma
+; DebugPrintHexByte a ; Take the value in register 'a' and output as hex (0x12)
+; DebugPrintNewLine ; Move the cursor to the start of the next line
+;
+; DebugPrintHexWord bc ; Take the value in register 'bc' and output as hex (0x3456)
+; DebugPrintChar ',' ; Output a comma
+; DebugPrintHexWord de ; Take the value in register 'de' and output as hex (0x789A)
+; DebugPrintNewLine ; Move the cursor to the start of the next line
+;
+; DebugPrintXY 32,0 ; Move the cursor to column 32 row 0
+;
+; DebugPrintLabeledHexByte " a=", a ; Take the value in register 'a' and output as hex with the string prefix " a=" (a=12)
+; DebugPrintXY 32,1 ; Move the cursor to column 32 row 1
+; DebugPrintLabeledHexWord "bc=", bc ; Take the value in register 'a' and output as hex with the string prefix "bc=" (bc=3456)
+; DebugPrintXY 32,2 ; Move the cursor to column 32 row 2
+; DebugPrintLabeledHexWord "de=", de ; Take the value in register 'a' and output as hex with the string prefix "de=" (de=789A)
+; DebugPrintXY 32,3 ; Move the cursor to column 32 row 3
+; DebugPrintLabeledHexWord "hl=", hl ; Take the value in register 'a' and output as hex with the string prefix "hl=" (hl=BCDE)
+
+
+debugScreenStart = 0xF800
+debugScreenEnd = debugScreenStart + 40*30
+debugCursorPos: dw debugScreenStart
+debugCursorCol: db 0
+
+; *************************************************************************
+
+ macro DebugPrintHome
+    push af
+    push hl
+    ld hl, debugScreenStart
+    ld a, 0
+    ld (debugCursorPos), hl
+    ld (debugCursorCol), a
+    pop hl
+    pop af
+ endm
+
+; -------------------------------------------------------------------------
+
+ macro DebugPrintXY xPos, yPos
+    push af
+    push hl
+    push bc
+    ld hl, debugScreenStart
+    ld bc, yPos * 40 + xPos
+    add hl, bc
+    ld a, xPos
+    ld (debugCursorPos), hl
+    ld (debugCursorCol), a
+    pop bc
+    pop hl
+    pop af
+ endm
+
+; -------------------------------------------------------------------------
+ macro DebugPrintNewLine
+    push af
+    push hl
+    push bc
+    ld hl, (debugCursorPos)
+    ld b, 0
+    ld a, (debugCursorCol)
+    ld c, a
+    xor a, a
+    sbc hl, bc
+    ld bc, 40
+    add hl, bc
+    ld (debugCursorPos), hl
+    ld (debugCursorCol), a
+    ld bc, debugScreenEnd
+    or a, a
+    sbc hl, bc
+    jr nz, .noScreenWrap
+    ld hl, debugScreenStart
+    ld (debugCursorPos), hl
+.noScreenWrap
+    pop bc
+    pop hl
+    pop af
+ endm
+
+; *************************************************************************
+
+ macro DebugPrintChar value
+    push af
+    push hl
+    push bc
+    ld a, value
+    ld hl, (debugCursorPos)
+    ld (hl), a
+    inc hl
+    ld (debugCursorPos), hl
+    ld a, (debugCursorCol)
+    inc a
+    cp a, 40
+    jr nz, .noLineWrap
+    xor a, a
+.noLineWrap
+    ld (debugCursorCol), a
+    ld bc, debugScreenEnd
+    or a, a
+    sbc hl, bc
+    jr nz, .noScreenWrap
+    ld hl, debugScreenStart
+    ld (debugCursorPos), hl
+.noScreenWrap
+    pop bc
+    pop hl
+    pop af
+ endm
+
+; -------------------------------------------------------------------------
+
+ macro DebugPrintString string
+    push af
+    push hl
+    push bc
+    jr .debugStringEnd
+.debugString db string
+.debugStringEnd
+    ld b, .debugStringEnd - .debugString
+    ld hl, .debugString
+.characterLoop
+    ld a, (hl)
+    inc hl
+    DebugPrintChar a
+    djnz .characterLoop
+    pop bc
+    pop hl
+    pop af
+ endm
+
+; *************************************************************************
+
+ macro DebugPrintHexByte value
+    push af
+    push bc
+    ld a, value
+    ld b, value
+
+    srl a
+    srl a
+    srl a
+    srl a
+    cp a, 10
+    jp nc, .firstHexLetter
+    add a, '0'
+    jp .firstOutputChar
+.firstHexLetter
+    add a, 'A'-10
+.firstOutputChar
+    DebugPrintChar a
+
+    ld a, b
+    and a, 0xF
+    cp a, 10
+    jp nc, .secondHexLetter
+    add a, '0'
+    jp .secondOutputChar
+.secondHexLetter
+    add a, 'A'-10
+.secondOutputChar
+    DebugPrintChar a
+
+    pop bc
+    pop af
+ endm
+
+ macro DebugPrintHexWord value
+    push af
+    push hl
+    push value
+    pop hl
+    DebugPrintHexByte h
+    DebugPrintHexByte l
+    pop hl
+    pop af
+ endm
+
+; -------------------------------------------------------------------------
+
+ macro DebugPrintLabeledHexByte string, value
+    DebugPrintString string
+    DebugPrintHexByte value
+ endm
+
+; -------------------------------------------------------------------------
+
+ macro DebugPrintLabeledHexWord string, value
+    DebugPrintString string
+    DebugPrintHexWord value
+ endm
+
+; *************************************************************************

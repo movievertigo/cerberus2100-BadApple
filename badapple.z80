@@ -1,0 +1,235 @@
+    output "bin/badapple.bin"
+    org 0x0205
+    jr start
+
+    include "debug.z80"
+
+chardefs = 0xF000
+screen = 0xF800
+outboxFlag = 0x0200
+outboxData = 0x0201
+inboxFlag = 0x0202
+inboxData = 0x0203
+
+cmdFileOpen = 0x07
+cmdFileRead = 0x08
+cmdFileClose = 0x09
+cmdReset = 0x7F
+
+time: dw 0
+
+loadAddress: dw databuffer
+loadByteCount: dw 0
+
+dataFileName: db "badapple.dat", 0
+
+; -------------------------------------------------------------------------
+
+ macro ExecuteCommand command
+    ld a, command
+    ld (inboxFlag), a
+.commandwaitloop
+    ld a, (inboxFlag)
+    or a, a
+    jr nz, .commandwaitloop
+ endm
+
+; -------------------------------------------------------------------------
+
+start:
+    call init
+
+    ; Get the first frame size
+    ld hl, 2
+    ld (loadByteCount), hl
+    ExecuteCommand cmdFileRead
+    ld hl, (databuffer)
+    ld (loadByteCount), hl
+
+frameLoop:
+    ExecuteCommand cmdFileRead
+    exx
+    ld hl, (loadByteCount)
+    exx
+
+    ld de, databuffer
+    ld hl, screen
+    ld b, 0
+decompressLoop:
+    ld a, (de)
+    bit 7, a
+    jr nz, runOfChars
+runOfSkips:
+    ld c, a
+    add hl, bc
+    inc hl
+    jr runEnd
+runOfChars:
+    ld c, a
+    and a, 7
+    inc a
+runOfCharsLoop:
+    ld (hl), c
+    inc hl
+    dec a
+    jr nz, runOfCharsLoop
+runEnd:
+    inc de
+    exx
+    dec hl
+    ld a, h
+    or a, l
+    exx
+
+    jr nz, decompressLoop
+
+    ld hl, (loadByteCount)
+    ld bc, databuffer
+    add hl, bc
+    dec hl
+    ld b, (hl)
+    dec hl
+    ld c, (hl)
+    ld (loadByteCount), bc
+
+    ld a, b
+    or a, c
+
+    jr nz, frameLoop
+
+    call prepareVideoRamForExit
+    ExecuteCommand cmdReset
+
+; -------------------------------------------------------------------------
+
+init:
+    call initInterrupt
+    call initVideoRam
+    call initCharDefs
+    call openDataFile
+    call initInboxData
+    ret
+
+; -------------------------------------------------------------------------
+
+initInterrupt:
+	ld a, 0xC3          ; Opcode for jp
+    ld hl, interrupt	; Interrupt handler
+    ; Store at NMI vector address
+	ld (0x0066), a
+	ld (0x0067), hl
+    ret
+
+; -------------------------------------------------------------------------
+
+initVideoRam:
+    ld bc, 256*8 + 40*30
+    ld hl, chardefs
+.charloop
+    ld (hl), 0
+    inc hl
+    dec bc
+    ld a, b
+    or a, c
+    jr nz, .charloop
+    ret
+
+; -------------------------------------------------------------------------
+
+prepareVideoRamForExit:
+    ld hl, chardefs + 32 * 8
+    ld b, 8
+.charDefLoop
+    ld (hl), 0
+    inc hl
+    djnz .charDefLoop
+
+    ld bc, 40*30
+    ld hl, screen
+.charloop
+    ld (hl), 32
+    inc hl
+    dec bc
+    ld a, b
+    or a, c
+    jr nz, .charloop
+    ret
+
+; -------------------------------------------------------------------------
+
+initCharDefs:
+    ld b, 0
+    ld hl, chardefs
+.charloop
+    ld a, 0
+    bit 3, b
+    jr z, .segmentA
+    or a, 15<<4
+.segmentA
+    bit 4, b
+    jr z, .segmentB
+    or a, 15
+.segmentB
+    ld (hl), a
+    inc hl
+    ld (hl), a
+    inc hl
+    ld (hl), a
+    inc hl
+    ld (hl), a
+    inc hl
+
+    ld a, 0
+    bit 5, b
+    jr z, .segmentC
+    or a, 15<<4
+.segmentC
+    bit 6, b
+    jr z, .segmentD
+    or a, 15
+.segmentD
+    ld (hl), a
+    inc hl
+    ld (hl), a
+    inc hl
+    ld (hl), a
+    inc hl
+    ld (hl), a
+    inc hl
+
+    inc b
+    jr nz, .charloop
+    ret
+
+; -------------------------------------------------------------------------
+
+openDataFile:
+    ld hl, dataFileName
+    ld (inboxData), hl
+    ExecuteCommand cmdFileOpen
+    ret
+
+; -------------------------------------------------------------------------
+
+initInboxData:
+    ld hl, loadAddress
+    ld (inboxData), hl
+    ret
+
+; -------------------------------------------------------------------------
+
+interrupt:
+    push af
+    push hl
+    ld hl, (time)
+    inc hl
+    ld (time), hl
+    pop hl
+    pop af
+    reti
+
+; -------------------------------------------------------------------------
+
+endofcode:
+
+databuffer = endofcode
