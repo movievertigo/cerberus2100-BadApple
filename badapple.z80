@@ -57,9 +57,9 @@ frameLoop:
     ld b, 0
 decompressLoop:
     ld a, (de)
-    bit 7, a
     ld c, a
-    jr nz, runOfChars
+    or a, a
+    jp m, runOfChars
 runOfSkips:
     add hl, bc
     inc hl
@@ -83,16 +83,16 @@ runEnd:
     jr nz, decompressLoop
 
     ld hl, (loadByteCount)
-    ld bc, databuffer
-    add hl, bc
+    ld de, databuffer
+    add hl, de
     dec hl
-    ld b, (hl)
+    ld d, (hl)
     dec hl
-    ld c, (hl)
-    ld (loadByteCount), bc
+    ld e, (hl)
+    ld (loadByteCount), de
 
-    ld a, b
-    or a, c
+    ld a, d
+    or a, e
 
     jr nz, frameLoop
 
