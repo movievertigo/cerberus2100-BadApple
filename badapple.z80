@@ -58,14 +58,13 @@ frameLoop:
 decompressLoop:
     ld a, (de)
     bit 7, a
+    ld c, a
     jr nz, runOfChars
 runOfSkips:
-    ld c, a
     add hl, bc
     inc hl
     jr runEnd
 runOfChars:
-    ld c, a
     and a, 7
     inc a
 runOfCharsLoop:
