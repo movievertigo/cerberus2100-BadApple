@@ -93,7 +93,7 @@ debugCursorCol: db 0
     ld bc, debugScreenEnd
     or a, a
     sbc hl, bc
-    jr nz, .noScreenWrap
+    jp nz, .noScreenWrap
     ld hl, debugScreenStart
     ld (debugCursorPos), hl
 .noScreenWrap
@@ -116,14 +116,14 @@ debugCursorCol: db 0
     ld a, (debugCursorCol)
     inc a
     cp a, 40
-    jr nz, .noLineWrap
+    jp nz, .noLineWrap
     xor a, a
 .noLineWrap
     ld (debugCursorCol), a
     ld bc, debugScreenEnd
     or a, a
     sbc hl, bc
-    jr nz, .noScreenWrap
+    jp nz, .noScreenWrap
     ld hl, debugScreenStart
     ld (debugCursorPos), hl
 .noScreenWrap
@@ -138,7 +138,7 @@ debugCursorCol: db 0
     push af
     push hl
     push bc
-    jr .debugStringEnd
+    jp .debugStringEnd
 .debugString db string
 .debugStringEnd
     ld b, .debugStringEnd - .debugString
@@ -166,7 +166,7 @@ debugCursorCol: db 0
     srl a
     srl a
     cp a, 10
-    jp nc, .firstHexLetter
+    jr nc, .firstHexLetter
     add a, '0'
     jp .firstOutputChar
 .firstHexLetter
@@ -177,7 +177,7 @@ debugCursorCol: db 0
     ld a, b
     and a, 0xF
     cp a, 10
-    jp nc, .secondHexLetter
+    jr nc, .secondHexLetter
     add a, '0'
     jp .secondOutputChar
 .secondHexLetter

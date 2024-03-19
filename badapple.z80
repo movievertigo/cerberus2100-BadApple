@@ -1,6 +1,6 @@
     output "bin/badapple.bin"
     org 0x0205
-    jr start
+    jp start
 
     include "debug.z80"
 
@@ -12,8 +12,9 @@ inboxFlag = 0x0202
 inboxData = 0x0203
 
 cmdFileOpen = 0x07
-cmdFileRead = 0x08
-cmdFileClose = 0x09
+cmdFileClose = 0x08
+cmdFileRead = 0x09
+cmdFileSeek = 0x0A
 cmdReset = 0x7F
 
 time: dw 0
@@ -39,6 +40,14 @@ dataFileName: db "badapple.dat", 0
 start:
     call init
 
+    ld hl, 0xa9e2
+    ld (loadAddress), hl
+    ld hl, 0x0006
+    ld (loadByteCount), hl
+    ExecuteCommand cmdFileSeek
+    ld hl, databuffer
+    ld (loadAddress), hl
+
     ; Get the first frame size
     ld hl, 2
     ld (loadByteCount), hl
@@ -63,7 +72,7 @@ decompressLoop:
 runOfSkips:
     add hl, bc
     inc hl
-    jr runEnd
+    jp runEnd
 runOfChars:
     and a, 7
     inc a
@@ -80,7 +89,7 @@ runEnd:
     or a, l
     exx
 
-    jr nz, decompressLoop
+    jp nz, decompressLoop
 
     ld hl, (loadByteCount)
     ld de, databuffer
@@ -94,7 +103,7 @@ runEnd:
     ld a, d
     or a, e
 
-    jr nz, frameLoop
+    jp nz, frameLoop
 
     call prepareVideoRamForExit
     ExecuteCommand cmdReset
@@ -130,7 +139,7 @@ initVideoRam:
     dec bc
     ld a, b
     or a, c
-    jr nz, .charloop
+    jp nz, .charloop
     ret
 
 ; -------------------------------------------------------------------------
@@ -151,7 +160,7 @@ prepareVideoRamForExit:
     dec bc
     ld a, b
     or a, c
-    jr nz, .charloop
+    jp nz, .charloop
     ret
 
 ; -------------------------------------------------------------------------
@@ -197,7 +206,7 @@ initCharDefs:
     inc hl
 
     inc b
-    jr nz, .charloop
+    jp nz, .charloop
     ret
 
 ; -------------------------------------------------------------------------
