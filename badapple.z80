@@ -20,12 +20,15 @@ cmdSetTimerFrequency = 0x50
 cmdReset = 0x7F
 
 frequency: dd 1000000/30
+bufferFillRate = 105
 
 frameTime: dw 0
 time: dw 0
+currentFrameSize: dw 0
+currentPositionAddress: dw 0
 
-loadAddress: dw databuffer
-loadByteCount: dw 0
+loadAddress: dw 0
+loadByteCount: dw bufferFillRate
 
 dataFileName: db "badapple.dat", 0
 
@@ -40,6 +43,14 @@ dataFileName: db "badapple.dat", 0
     jr nz, .commandwaitloop
  endm
 
+ macro add_hl_a
+    add a, l
+    ld l, a
+    adc a, h
+    sub l
+    ld h, a
+ endm
+
 ; -------------------------------------------------------------------------
 
 start:
@@ -49,7 +60,7 @@ start:
     ld hl, 2
     ld (loadByteCount), hl
     ExecuteCommand cmdFileRead
-    ld hl, (databuffer)
+    ld hl, (dataBufferStart)
     ld (loadByteCount), hl
 
 frameLoop:
@@ -68,23 +79,22 @@ timeLoop:
     ld hl, (loadByteCount)
     exx
 
-    ld de, databuffer
+    ld de, dataBufferStart
     ld hl, screen
-    ld b, 0
 decompressLoop:
     ld a, (de)
-    ld c, a
+    ld b, a
     or a, a
     jp m, runOfChars
 runOfSkips:
-    add hl, bc
+    add_hl_a
     inc hl
     jp runEnd
 runOfChars:
     and a, 7
     inc a
 runOfCharsLoop:
-    ld (hl), c
+    ld (hl), b
     inc hl
     dec a
     jr nz, runOfCharsLoop
@@ -99,7 +109,7 @@ runEnd:
     jp nz, decompressLoop
 
     ld hl, (loadByteCount)
-    ld de, databuffer
+    ld de, dataBufferStart
     add hl, de
     dec hl
     ld d, (hl)
@@ -118,12 +128,21 @@ runEnd:
 ; -------------------------------------------------------------------------
 
 init:
+    call initVariables
     call initInterrupt
     call initTimers
     call initVideoRam
     call initCharDefs
     call openDataFile
     call initInboxData
+    ret
+
+; -------------------------------------------------------------------------
+
+initVariables:
+    ld hl, dataBufferStart
+    ld (loadAddress), hl
+    ld (currentPositionAddress), hl
     ret
 
 ; -------------------------------------------------------------------------
@@ -258,6 +277,9 @@ interrupt:
 
 ; -------------------------------------------------------------------------
 
-endofcode:
+endOfCode:
 
-databuffer = endofcode
+endOfMemory = 0xEFFE
+
+dataBufferStart = endOfCode
+dataBufferEnd = dataBufferStart + bufferFillRate * ((endOfMemory - dataBufferStart) / bufferFillRate)
