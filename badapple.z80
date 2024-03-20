@@ -20,15 +20,12 @@ cmdSetTimerFrequency = 0x50
 cmdReset = 0x7F
 
 frequency: dd 1000000/30
-bufferFillRate = 105
 
 frameTime: dw 0
 time: dw 0
-currentFrameSize: dw 0
-currentPositionAddress: dw 0
 
 loadAddress: dw 0
-loadByteCount: dw bufferFillRate
+loadByteCount: dw 0
 
 dataFileName: db "badapple.dat", 0
 
@@ -47,7 +44,7 @@ dataFileName: db "badapple.dat", 0
     add a, l
     ld l, a
     adc a, h
-    sub l
+    sub a, l
     ld h, a
  endm
 
@@ -60,8 +57,14 @@ start:
     ld hl, 2
     ld (loadByteCount), hl
     ExecuteCommand cmdFileRead
-    ld hl, (dataBufferStart)
+
+    ; Store it in the byte count for the next load and take a copy in a 2nd alt-register
+    exx
+    ld hl, (dataBuffer)
     ld (loadByteCount), hl
+    ld b,h
+    ld c,l
+    exx
 
 frameLoop:
     ld bc, (frameTime)
@@ -75,12 +78,10 @@ timeLoop:
     jr c, timeLoop
 
     ExecuteCommand cmdFileRead
-    exx
-    ld hl, (loadByteCount)
-    exx
 
-    ld de, dataBufferStart
+    ld de, dataBuffer
     ld hl, screen
+    ld b, 0
 decompressLoop:
     ld a, (de)
     ld b, a
@@ -101,21 +102,24 @@ runOfCharsLoop:
 runEnd:
     inc de
     exx
-    dec hl
-    ld a, h
-    or a, l
+    dec bc
+    ld a, b
+    or a, c
     exx
 
     jp nz, decompressLoop
 
-    ld hl, (loadByteCount)
-    ld de, dataBufferStart
-    add hl, de
+    exx
+    ld bc, dataBuffer
+    add hl, bc
     dec hl
-    ld d, (hl)
+    ld b, (hl)
     dec hl
-    ld e, (hl)
-    ld (loadByteCount), de
+    ld c, (hl)
+    ld h, b
+    ld l, c
+    ld (loadByteCount), hl
+    exx
 
     ld a, d
     or a, e
@@ -140,9 +144,8 @@ init:
 ; -------------------------------------------------------------------------
 
 initVariables:
-    ld hl, dataBufferStart
+    ld hl, dataBuffer
     ld (loadAddress), hl
-    ld (currentPositionAddress), hl
     ret
 
 ; -------------------------------------------------------------------------
@@ -279,7 +282,5 @@ interrupt:
 
 endOfCode:
 
-endOfMemory = 0xEFFE
-
-dataBufferStart = endOfCode
-dataBufferEnd = dataBufferStart + bufferFillRate * ((endOfMemory - dataBufferStart) / bufferFillRate)
+dataBuffer = endOfCode
+bigFrames = dataBuffer + 1200
