@@ -11,12 +11,17 @@ outboxData = 0x0201
 inboxFlag = 0x0202
 inboxData = 0x0203
 
-cmdFileOpen = 0x07
-cmdFileClose = 0x08
-cmdFileRead = 0x09
-cmdFileSeek = 0x0A
+cmdFileOpen = 0x40
+cmdFileClose = 0x41
+cmdFileRead = 0x42
+cmdFileSeek = 0x43
+cmdFileSeek = 0x43
+cmdSetTimerFrequency = 0x50
 cmdReset = 0x7F
 
+frequency: dd 1000000/30
+
+frameTime: dw 0
 time: dw 0
 
 loadAddress: dw databuffer
@@ -40,14 +45,6 @@ dataFileName: db "badapple.dat", 0
 start:
     call init
 
-    ld hl, 0xa9e2
-    ld (loadAddress), hl
-    ld hl, 0x0006
-    ld (loadByteCount), hl
-    ExecuteCommand cmdFileSeek
-    ld hl, databuffer
-    ld (loadAddress), hl
-
     ; Get the first frame size
     ld hl, 2
     ld (loadByteCount), hl
@@ -56,6 +53,16 @@ start:
     ld (loadByteCount), hl
 
 frameLoop:
+    ld bc, (frameTime)
+    inc bc
+    ld (frameTime), bc
+
+timeLoop:
+    ld hl, (time)
+    or a, a
+    sbc hl, bc
+    jr c, timeLoop
+
     ExecuteCommand cmdFileRead
     exx
     ld hl, (loadByteCount)
@@ -112,6 +119,7 @@ runEnd:
 
 init:
     call initInterrupt
+    call initTimers
     call initVideoRam
     call initCharDefs
     call openDataFile
@@ -126,6 +134,18 @@ initInterrupt:
     ; Store at NMI vector address
 	ld (0x0066), a
 	ld (0x0067), hl
+    ret
+
+; -------------------------------------------------------------------------
+
+initTimers:
+    ld hl, frequency
+    ld (inboxData), hl
+    ExecuteCommand cmdSetTimerFrequency
+
+    ld hl, 0
+    ld (frameTime), hl
+    ld (time), hl
     ret
 
 ; -------------------------------------------------------------------------
