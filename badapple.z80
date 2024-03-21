@@ -64,9 +64,14 @@ start:
     ld (loadByteCount), hl
     ld b,h
     ld c,l
+
+    ; Init the big frames pointer
+    ld de, bigFrames
     exx
 
 frameLoop:
+    ExecuteCommand cmdFileRead
+
     ld bc, (frameTime)
     inc bc
     ld (frameTime), bc
@@ -76,8 +81,6 @@ timeLoop:
     or a, a
     sbc hl, bc
     jr c, timeLoop
-
-    ExecuteCommand cmdFileRead
 
     ld de, dataBuffer
     ld hl, screen
@@ -116,13 +119,14 @@ runEnd:
     ld b, (hl)
     dec hl
     ld c, (hl)
+    bit 7, b
+    jr nz, copyBigFrame
     ld h, b
     ld l, c
     ld (loadByteCount), hl
+    ld a, b
+    or a, c
     exx
-
-    ld a, d
-    or a, e
 
     jp nz, frameLoop
 
@@ -131,21 +135,33 @@ runEnd:
 
 ; -------------------------------------------------------------------------
 
+copyBigFrame:
+    res 7, b ; Remove the big frame flag to get the length
+    push bc ; Preserve the frame length
+    ld h, d ; Set up the source for the ldir...
+    ld l, e ; ...to copy from the current big frame address
+    ld de, dataBuffer ; Set up the destination for the ldir copy
+    ldir ; Do the copy
+    ld (loadByteCount), bc ; Store 0 into the load count to suppress loading when we start the frame
+    ld d, h ; Copy the new big frame address...
+    ld e, l ; ...back into its register
+    pop bc ; Restore the frame length
+    ld h, b ; And take a...
+    ld l, c ; ...second copy
+    exx
+    jp frameLoop
+
+; -------------------------------------------------------------------------
+
 init:
-    call initVariables
     call initInterrupt
     call initTimers
     call initVideoRam
     call initCharDefs
     call openDataFile
     call initInboxData
-    ret
-
-; -------------------------------------------------------------------------
-
-initVariables:
-    ld hl, dataBuffer
-    ld (loadAddress), hl
+    call loadBigFrames
+    call initVariables
     ret
 
 ; -------------------------------------------------------------------------
@@ -268,6 +284,31 @@ initInboxData:
 
 ; -------------------------------------------------------------------------
 
+loadBigFrames:
+    ld hl, bigFrames
+    ld (loadAddress), hl
+
+    ; Get the size of the big frame data
+    ld hl, 2
+    ld (loadByteCount), hl
+    ExecuteCommand cmdFileRead
+
+    ; Load that many bytes
+    ld hl, (bigFrames)
+    ld (loadByteCount), hl
+    ExecuteCommand cmdFileRead
+
+    ret
+
+; -------------------------------------------------------------------------
+
+initVariables:
+    ld hl, dataBuffer
+    ld (loadAddress), hl
+    ret
+
+; -------------------------------------------------------------------------
+
 interrupt:
     push af
     push hl
@@ -283,4 +324,4 @@ interrupt:
 endOfCode:
 
 dataBuffer = endOfCode
-bigFrames = dataBuffer + 1200
+bigFrames = dataBuffer + 40*30
