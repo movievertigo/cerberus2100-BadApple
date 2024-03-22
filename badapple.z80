@@ -70,64 +70,74 @@ start:
     exx
 
 frameLoop:
+    ; Load the next compressed frame
     ExecuteCommand cmdFileRead
 
+    ; Increment the time for the next frame
     ld bc, (frameTime)
     inc bc
     ld (frameTime), bc
 
 timeLoop:
+    ; Wait until we've reached that time
     ld hl, (time)
     or a, a
     sbc hl, bc
     jr c, timeLoop
 
+    ; Set up where we're reading from (dataBuffer) and writing too (screen)
     ld de, dataBuffer
     ld hl, screen
 decompressLoop:
-    ld a, (de)
-    ld b, a
-    or a, a
-    jp m, runOfChars
-runOfSkips:
-    add_hl_a
-    inc hl
-    jp runEnd
-runOfChars:
-    and a, 7
-    inc a
+    ld a, (de) ; Load the next compressed byte
+    or a, a ; Update the status flags
+    jp m, runOfChars ; If the top bit is set we're dealing with a run of characters
+runOfSkips: ; Otherwise we're skipping ahead
+    add_hl_a ; Skip ahead on the screen by the value of the compressed byte
+    inc hl ; We always skip at least one (The compressed value is always 1 less than we need)
+    jp runEnd ; Move on to the next run
+runOfChars: ; We're dealing with a run of characters (bit 0-2 = runlength-1  bit 3-6 = character)
+    ld b, a ; Keep a copy of the value
+    and a, 7 ; Remove everything but the run length
+    inc a ; We always print at least 1 character
 runOfCharsLoop:
-    ld (hl), b
-    inc hl
-    dec a
-    jr nz, runOfCharsLoop
+    ld (hl), b ; Output the character (We don't need to mask as we've redefined all the possible characters)
+    inc hl ; Move to the next character position
+    dec a ; Decrement the remaining number of characters to print
+    jr nz, runOfCharsLoop ; Loop back around if we haven't finished
 runEnd:
-    inc de
+    inc de ; Move on to the next compressed byte
     exx
-    dec bc
-    ld a, b
-    or a, c
+    dec bc ; Decrement the remaining number of compressed bytes to process
+    ld a, b ; We check if bc is zero...
+    or a, c ; ...by checking if b "or" c are non-zero
     exx
 
-    jp nz, decompressLoop
+    jp nz, decompressLoop ; If bc is non-zero we loop back around
 
     exx
+    ; Load the size of the next compressed frame from the last word of the current compressed frame
     ld bc, dataBuffer
     add hl, bc
     dec hl
     ld b, (hl)
     dec hl
     ld c, (hl)
-    bit 7, b
-    jr nz, copyBigFrame
+
+    bit 7, b ; If the top bit is set then the next frame is a pre-loaded "big frame"
+    jr nz, copyBigFrame ; so we need to copy it into the data buffer
+
+    ; Otherwise we set up the loadByteCount ready for the next load
     ld h, b
     ld l, c
     ld (loadByteCount), hl
+
+    ; Check if the size is zero
     ld a, b
     or a, c
     exx
 
-    jp nz, frameLoop
+    jp nz, frameLoop ; If the size is non-zero we loop back around
 
     call prepareVideoRamForExit
     ExecuteCommand cmdReset
