@@ -84,7 +84,6 @@ timeLoop:
 
     ld de, dataBuffer
     ld hl, screen
-    ld b, 0
 decompressLoop:
     ld a, (de)
     ld b, a
