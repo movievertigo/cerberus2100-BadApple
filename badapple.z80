@@ -17,6 +17,7 @@ cmdFileRead = 0x42
 cmdFileSeek = 0x43
 cmdFileSeek = 0x43
 cmdSetTimerFrequency = 0x50
+cmdSoundNb = 0x7E
 cmdReset = 0x7F
 
 frequency: dd 1000000/30
@@ -26,6 +27,9 @@ time: dw 0
 
 loadAddress: dw 0
 loadByteCount: dw 0
+
+noteFrequency: dw 0
+noteDuration: dw 0
 
 dataFileName: db "badapple.dat", 0
 
@@ -83,8 +87,28 @@ timeLoop:
     jr c, timeLoop
 
     ld de, dataBuffer
+    ld a, (de)
+    or a, a
+    jp z, noNote
+playNote:
+    ld hl, (dataBuffer)
+    ld (noteFrequency), hl
+    ld hl, (dataBuffer+2)
+    ld (noteDuration), hl
+
+    ld hl, noteFrequency
+    ld (inboxData), hl
+    ExecuteCommand cmdSoundNb
+    ld hl, loadAddress
+    ld (inboxData), hl
+
+    inc de
+    inc de
+    inc de
+noNote:
+    inc de
+
     ld hl, screen
-    ld b, 0
 decompressLoop:
     ld a, (de)
     ld b, a
